@@ -1,116 +1,122 @@
-const express = require('express');
-const http = require('http');
-const socketIo = require('socket.io');
-const path = require('path');
-const cookieParser = require('cookie-parser');
-const { v4: uuidv4 } = require('uuid');
-const bcrypt = require('bcrypt');
-require('dotenv').config();
+// script.js
+const socket = io();
 
-const app = express();
-const server = http.createServer(app);
-const io = socketIo(server);
+const authDiv = document.getElementById('auth');
+const pollAndChatDiv = document.getElementById('pollAndChat');
+const usernameInput = document.getElementById('usernameInput');
+const passwordInput = document.getElementById('passwordInput');
+const registerBtn = document.getElementById('registerBtn');
+const loginBtn = document.getElementById('loginBtn');
+const optionsDiv = document.getElementById('options');
+const messagesDiv = document.getElementById('messages');
+const chatInput = document.getElementById('chatInput');
+const sendBtn = document.getElementById('sendBtn');
+const typingIndicator = document.getElementById('typingIndicator');
 
-app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
-
-let pollData = {
-    options: ["Option 1", "Option 2", "Option 3"],
-    votes: [0, 0, 0]
+registerBtn.onclick = () => {
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value.trim();
+    if (username && password) {
+        fetch('/register', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ username, password }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message);
+            if (data.message === 'Registration successful') {
+                socket.emit('register', username);
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    } else {
+        alert('Please enter both username and password');
+    }
 };
 
-let chatMessages = [];
-let users = {}; // socket.id -> { username, userId }
-let votes = {}; // userId -> optionIndex
-let registeredUsers = {}; // username -> { userId, passwordHash }
-
-// Middleware to set a unique userId cookie if not present
-app.use((req, res, next) => {
-    if (!req.cookies.userId) {
-        res.cookie('userId', uuidv4(), { maxAge: 900000, httpOnly: true });
+loginBtn.onclick = () => {
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value.trim();
+    if (username && password) {
+        fetch('/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ username, password }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message);
+            if (data.message === 'Login successful') {
+                socket.emit('login', username); // Emit login event upon successful login
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    } else {
+        alert('Please enter both username and password');
     }
-    next();
+};
+
+socket.on('loginSuccess', ({ username, pollData, chatMessages }) => {
+    authDiv.style.display = 'none';  // Hide the authentication div
+    pollAndChatDiv.style.display = 'flex';  // Display the poll and chat div
+
+    // Render initial poll options
+    optionsDiv.innerHTML = '';
+    pollData.options.forEach((option, index) => {
+        const button = document.createElement('button');
+        button.textContent = `${option} (${pollData.votes[index]})`;
+        button.onclick = () => socket.emit('vote', index);
+        optionsDiv.appendChild(button);
+    });
+
+    // Render initial chat messages
+    messagesDiv.innerHTML = '';
+    chatMessages.forEach(message => {
+        const messageDiv = document.createElement('div');
+        messageDiv.textContent = message;
+        messagesDiv.appendChild(messageDiv);
+    });
 });
 
-// Endpoint to register a new user
-app.post('/api/register', async (req, res) => {
-    const { username, password } = req.body;
-    if (registeredUsers[username]) {
-        return res.status(400).json({ message: 'Username already exists' });
+socket.on('pollUpdate', (pollData) => {
+    // Update poll options with new vote counts
+    optionsDiv.innerHTML = '';
+    pollData.options.forEach((option, index) => {
+        const button = document.createElement('button');
+        button.textContent = `${option} (${pollData.votes[index]})`;
+        button.onclick = () => socket.emit('vote', index);
+        optionsDiv.appendChild(button);
+    });
+});
+
+socket.on('messageUpdate', (chatMessages) => {
+    // Update chat messages with new message
+    const newMessage = chatMessages[chatMessages.length - 1];
+    const messageDiv = document.createElement('div');
+    messageDiv.textContent = newMessage;
+    messagesDiv.appendChild(messageDiv);
+});
+
+sendBtn.onclick = () => {
+    const message = chatInput.value.trim();
+    if (message) {
+        socket.emit('newMessage', message);
+        chatInput.value = '';
     }
-    const userId = uuidv4();
-    const passwordHash = await bcrypt.hash(password, 10);
-    registeredUsers[username] = { userId, passwordHash };
-    res.cookie('userId', userId, { maxAge: 900000, httpOnly: true });
-    res.status(200).json({ message: 'Registration successful' });
+};
+
+chatInput.oninput = () => {
+    socket.emit('typing');
+};
+
+socket.on('typing', (user) => {
+    typingIndicator.textContent = `${user} is typing...`;
+    setTimeout(() => {
+        typingIndicator.textContent = '';
+    }, 3000);
 });
-
-// Endpoint to login an existing user
-app.post('/api/login', async (req, res) => {
-    const { username, password } = req.body;
-    const user = registeredUsers[username];
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-        return res.status(400).json({ message: 'Invalid username or password' });
-    }
-    res.cookie('userId', user.userId, { maxAge: 900000, httpOnly: true });
-    res.status(200).json({ message: 'Login successful' });
-});
-
-io.on('connection', (socket) => {
-    console.log('New client connected');
-
-    // Extract userId from cookies
-    const cookie = socket.handshake.headers.cookie || '';
-    const userIdMatch = cookie.match(/userId=([^;]+)/);
-    const userId = userIdMatch ? userIdMatch[1] : uuidv4();
-
-    socket.on('register', (username) => {
-        const user = registeredUsers[username];
-        if (user && user.userId === userId) {
-            users[socket.id] = { username, userId };
-            socket.emit('registrationSuccess', username);
-            io.emit('userUpdate', Object.values(users).map(user => user.username));
-        } else {
-            socket.emit('registrationFailed', 'User not authenticated');
-        }
-    });
-
-    socket.emit('initialData', { pollData, chatMessages });
-
-    socket.on('vote', (optionIndex) => {
-        if (votes[userId] == null) {
-            votes[userId] = optionIndex;
-            pollData.votes[optionIndex]++;
-            io.emit('pollUpdate', pollData);
-        } else {
-            socket.emit('voteError', 'You have already voted');
-        }
-    });
-
-    socket.on('newMessage', (message) => {
-        const user = users[socket.id];
-        if (user) {
-            const fullMessage = `${user.username}: ${message}`;
-            chatMessages.push(fullMessage);
-            io.emit('messageUpdate', chatMessages);
-        }
-    });
-
-    socket.on('typing', () => {
-        const user = users[socket.id];
-        if (user) {
-            socket.broadcast.emit('typing', user.username);
-        }
-    });
-
-    socket.on('disconnect', () => {
-        delete users[socket.id];
-        io.emit('userUpdate', Object.values(users).map(user => user.username));
-        console.log('Client disconnected');
-    });
-});
-
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
