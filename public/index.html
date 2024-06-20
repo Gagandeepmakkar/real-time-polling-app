@@ -1,36 +1,148 @@
-<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-time Polling and Chat Application</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Real-time Polling and Chat</title>
+    <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-    <div id="auth">
-        <h2>Login / Register</h2>
+    <div id="authDiv">
+        <h2>Login/Register</h2>
         <input type="text" id="usernameInput" placeholder="Username">
         <input type="password" id="passwordInput" placeholder="Password">
-        <button id="registerBtn">Register</button>
         <button id="loginBtn">Login</button>
-    </div>
-
-    <div id="pollAndChat" style="display: none;">
-        <div id="poll">
-            <h2>Poll</h2>
-            <div id="options"></div>
+        <button id="registerBtn">Register</button>
+        <div id="authError"></
+            <div id="authError"></div>
         </div>
-        <div id="chat">
-            <h2>Chat</h2>
-            <div id="messages"></div>
-            <input type="text" id="chatInput" placeholder="Type your message...">
-            <button id="sendBtn">Send</button>
-            <div id="typingIndicator"></div>
+    
+        <div id="mainDiv" style="display:none;">
+            <h2>Real-time Polling and Chat</h2>
+            <div id="pollDiv">
+                <h3>Poll</h3>
+                <div id="pollOptions"></div>
+                <div id="pollError"></div>
+            </div>
+            <div id="chatDiv">
+                <h3>Chat</h3>
+                <div id="chatMessages"></div>
+                <input type="text" id="chatInput" placeholder="Type a message...">
+                <button id="sendBtn">Send</button>
+            </div>
         </div>
-    </div>
-
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="script.js"></script>
-</body>
-</html>
+    
+        <script src="/socket.io/socket.io.js"></script>
+        <script>
+            document.addEventListener('DOMContentLoaded', () => {
+                const socket = io();
+                const authDiv = document.getElementById('authDiv');
+                const mainDiv = document.getElementById('mainDiv');
+                const usernameInput = document.getElementById('usernameInput');
+                const passwordInput = document.getElementById('passwordInput');
+                const loginBtn = document.getElementById('loginBtn');
+                const registerBtn = document.getElementById('registerBtn');
+                const authError = document.getElementById('authError');
+                const pollDiv = document.getElementById('pollDiv');
+                const pollOptions = document.getElementById('pollOptions');
+                const pollError = document.getElementById('pollError');
+                const chatDiv = document.getElementById('chatDiv');
+                const chatMessages = document.getElementById('chatMessages');
+                const chatInput = document.getElementById('chatInput');
+                const sendBtn = document.getElementById('sendBtn');
+    
+                loginBtn.addEventListener('click', async () => {
+                    const username = usernameInput.value;
+                    const password = passwordInput.value;
+                    const response = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ username, password })
+                    });
+                    const result = await response.json();
+                    if (response.status === 200) {
+                        authDiv.style.display = 'none';
+                        mainDiv.style.display = 'block';
+                        socket.emit('register', username);
+                    } else {
+                        authError.textContent = result.message;
+                    }
+                });
+    
+                registerBtn.addEventListener('click', async () => {
+                    const username = usernameInput.value;
+                    const password = passwordInput.value;
+                    const response = await fetch('/api/register', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ username, password })
+                    });
+                    const result = await response.json();
+                    if (response.status === 200) {
+                        authDiv.style.display = 'none';
+                        mainDiv.style.display = 'block';
+                        socket.emit('register', username);
+                    } else {
+                        authError.textContent = result.message;
+                    }
+                });
+    
+                socket.on('initialData', data => {
+                    updatePoll(data.pollData);
+                    updateChat(data.chatMessages);
+                });
+    
+                socket.on('pollUpdate', pollData => {
+                    updatePoll(pollData);
+                });
+    
+                socket.on('messageUpdate', messages => {
+                    updateChat(messages);
+                });
+    
+                sendBtn.addEventListener('click', () => {
+                    const message = chatInput.value;
+                    chatInput.value = '';
+                    socket.emit('newMessage', message);
+                });
+    
+                chatInput.addEventListener('keypress', () => {
+                    socket.emit('typing');
+                });
+    
+                socket.on('typing', username => {
+                    // Handle typing indicator
+                });
+    
+                const updatePoll = pollData => {
+                    pollOptions.innerHTML = '';
+                    pollData.options.forEach((option, index) => {
+                        const optionDiv = document.createElement('div');
+                        optionDiv.textContent = `${option}: ${pollData.votes[index]}`;
+                        optionDiv.addEventListener('click', () => {
+                            socket.emit('vote', index);
+                        });
+                        pollOptions.appendChild(optionDiv);
+                    });
+                };
+    
+                const updateChat = messages => {
+                    chatMessages.innerHTML = '';
+                    messages.forEach(message => {
+                        const messageDiv = document.createElement('div');
+                        messageDiv.textContent = message;
+                        chatMessages.appendChild(messageDiv);
+                    });
+                };
+    
+                socket.on('voteError', error => {
+                    pollError.textContent = error;
+                });
+            });
+        </script>
+    </body>
+    </html>
+    
