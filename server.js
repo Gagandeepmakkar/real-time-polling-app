@@ -1,11 +1,10 @@
-// server.js
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const { v4: uuidv4 } = require('uuid');
-const bcrypt = require('bcrypt');
+const argon2 = require('argon2');
 
 const app = express();
 const server = http.createServer(app);
@@ -17,9 +16,11 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 let pollData = {
-    options: ["Option 1", "Option 2", "Option 3"],
+    name: "Next Prime Minister of India",
+    options: ["Narendra Modi", "Rahul Gandhi", "Arvind Kejriwal"],
     votes: [0, 0, 0]
 };
+
 
 let chatMessages = [];
 let users = {}; // socket.id -> { username, userId }
@@ -40,18 +41,23 @@ app.post('/register', async (req, res) => {
     if (registeredUsers[username]) {
         return res.status(400).json({ message: 'Username already exists' });
     }
-    const userId = uuidv4();
-    const passwordHash = await bcrypt.hash(password, 10);
-    registeredUsers[username] = { userId, passwordHash };
-    res.cookie('userId', userId, { maxAge: 900000, httpOnly: true });
-    res.status(200).json({ message: 'Registration successful' });
+    try {
+        const userId = uuidv4();
+        const passwordHash = await argon2.hash(password); // Hash password with argon2
+        registeredUsers[username] = { userId, passwordHash };
+        res.cookie('userId', userId, { maxAge: 900000, httpOnly: true });
+        res.status(200).json({ message: 'Registration successful' });
+    } catch (error) {
+        console.error('Error hashing password:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
 });
 
 // Endpoint to login an existing user
 app.post('/login', async (req, res) => {
     const { username, password } = req.body;
     const user = registeredUsers[username];
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    if (!user || !(await argon2.verify(user.passwordHash, password))) { // Verify password with argon2
         return res.status(400).json({ message: 'Invalid username or password' });
     }
     // Emit login success with pollData and chatMessages
