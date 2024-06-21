@@ -18,4 +18,10 @@ This is a real-time polling application with chat features built using Node.js, 
 2. Navigate to the project directory.
 3. Install the required dependencies:
    ```bash
-   npm install
+   npm install and to run the program node server.js
+
+## How to run project 
+1. Enter Username and Password to register the user.
+2. Refresh the webpage.
+3. Enter the crediatials to login.
+4. Vote the poll and enter the chat.

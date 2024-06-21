@@ -16,18 +16,17 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 let pollData = {
-    name: "Next Prime Minister of India",
-    options: ["Narendra Modi", "Rahul Gandhi", "Arvind Kejriwal"],
+    options: ["Nandi Hills", "Skandgiri", "Anthargange"],
     votes: [0, 0, 0]
 };
 
 
 let chatMessages = [];
-let users = {}; // socket.id -> { username, userId }
-let votes = {}; // userId -> optionIndex
-let registeredUsers = {}; // username -> { userId, passwordHash }
+let users = {}; 
+let votes = {}; 
+let registeredUsers = {}; 
 
-// Middleware to set a unique userId cookie if not present
+
 app.use((req, res, next) => {
     if (!req.cookies.userId) {
         res.cookie('userId', uuidv4(), { maxAge: 900000, httpOnly: true });
@@ -35,7 +34,6 @@ app.use((req, res, next) => {
     next();
 });
 
-// Endpoint to register a new user
 app.post('/register', async (req, res) => {
     const { username, password } = req.body;
     if (registeredUsers[username]) {
@@ -43,7 +41,7 @@ app.post('/register', async (req, res) => {
     }
     try {
         const userId = uuidv4();
-        const passwordHash = await argon2.hash(password); // Hash password with argon2
+        const passwordHash = await argon2.hash(password); 
         registeredUsers[username] = { userId, passwordHash };
         res.cookie('userId', userId, { maxAge: 900000, httpOnly: true });
         res.status(200).json({ message: 'Registration successful' });
@@ -53,14 +51,13 @@ app.post('/register', async (req, res) => {
     }
 });
 
-// Endpoint to login an existing user
 app.post('/login', async (req, res) => {
     const { username, password } = req.body;
     const user = registeredUsers[username];
-    if (!user || !(await argon2.verify(user.passwordHash, password))) { // Verify password with argon2
+    if (!user || !(await argon2.verify(user.passwordHash, password))) { 
         return res.status(400).json({ message: 'Invalid username or password' });
     }
-    // Emit login success with pollData and chatMessages
+   
     res.cookie('userId', user.userId, { maxAge: 900000, httpOnly: true });
     const userData = {
         username,
@@ -73,7 +70,6 @@ app.post('/login', async (req, res) => {
 io.on('connection', (socket) => {
     console.log('New client connected');
 
-    // Extract userId from cookies
     const cookie = socket.handshake.headers.cookie || '';
     const userIdMatch = cookie.match(/userId=([^;]+)/);
     const userId = userIdMatch ? userIdMatch[1] : uuidv4();

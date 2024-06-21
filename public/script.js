@@ -1,4 +1,3 @@
-// script.js
 const socket = io();
 
 const authDiv = document.getElementById('auth');
@@ -52,7 +51,7 @@ loginBtn.onclick = () => {
         .then(data => {
             alert(data.message);
             if (data.message === 'Login successful') {
-                socket.emit('login', username); // Emit login event upon successful login
+                socket.emit('login', username); 
             }
         })
         .catch(error => console.error('Error:', error));
@@ -62,10 +61,9 @@ loginBtn.onclick = () => {
 };
 
 socket.on('loginSuccess', ({ username, pollData, chatMessages }) => {
-    authDiv.style.display = 'none';  // Hide the authentication div
-    pollAndChatDiv.style.display = 'flex';  // Display the poll and chat div
+    authDiv.style.display = 'none';
+    pollAndChatDiv.style.display = 'flex'; 
 
-    // Render initial poll options
     optionsDiv.innerHTML = '';
     pollData.options.forEach((option, index) => {
         const button = document.createElement('button');
@@ -74,7 +72,6 @@ socket.on('loginSuccess', ({ username, pollData, chatMessages }) => {
         optionsDiv.appendChild(button);
     });
 
-    // Render initial chat messages
     messagesDiv.innerHTML = '';
     chatMessages.forEach(message => {
         const messageDiv = document.createElement('div');
@@ -84,7 +81,6 @@ socket.on('loginSuccess', ({ username, pollData, chatMessages }) => {
 });
 
 socket.on('pollUpdate', (pollData) => {
-    // Update poll options with new vote counts
     optionsDiv.innerHTML = '';
     pollData.options.forEach((option, index) => {
         const button = document.createElement('button');
@@ -95,7 +91,7 @@ socket.on('pollUpdate', (pollData) => {
 });
 
 socket.on('messageUpdate', (chatMessages) => {
-    // Update chat messages with new message
+
     const newMessage = chatMessages[chatMessages.length - 1];
     const messageDiv = document.createElement('div');
     messageDiv.textContent = newMessage;
